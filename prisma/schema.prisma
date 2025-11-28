@@ -1,0 +1,274 @@
+// ============================================================================
+// PRISMA SCHEMA - THE COMMISSARY ORDERING SYSTEM
+// ============================================================================
+// Database: PostgreSQL (Neon)
+// Schema Version: 1.0.0
+// Last Updated: 2025
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id               String    @id @default(uuid()) @db.Uuid
+  firebaseUid      String    @unique @map("firebase_uid")
+  email            String    @unique
+  phone            String?
+  firstName        String?   @map("first_name")
+  lastName         String?   @map("last_name")
+  role             UserRole  @default(CUSTOMER)
+  stripeCustomerId String?   @unique @map("stripe_customer_id")
+
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  orders           Order[]
+
+  @@map("users")
+  @@index([firebaseUid])
+  @@index([email])
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+// ============================================================================
+// MENU MANAGEMENT
+// ============================================================================
+
+model Category {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @unique
+  description  String?
+  displayOrder Int       @default(0) @map("display_order")
+  isActive     Boolean   @default(true) @map("is_active")
+  imageUrl     String?   @map("image_url")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  menuItems    MenuItem[]
+
+  @@map("categories")
+  @@index([displayOrder])
+  @@index([isActive])
+}
+
+model MenuItem {
+  id                 String             @id @default(uuid()) @db.Uuid
+  categoryId         String             @map("category_id") @db.Uuid
+  name               String
+  description        String?
+  basePrice          Decimal            @map("base_price") @db.Decimal(10, 2)
+  imageUrl           String?            @map("image_url")
+  thumbnailUrl       String?            @map("thumbnail_url")
+  isAvailable        Boolean            @default(true) @map("is_available")
+  isPopular          Boolean            @default(false) @map("is_popular")
+  preparationTime    Int                @default(10) @map("preparation_time") // minutes
+  calories           Int?
+  allergens          String[]
+  displayOrder       Int                @default(0) @map("display_order")
+  printerDestination PrinterDestination @default(KITCHEN) @map("printer_destination")
+
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  category           Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  modifierGroups     ModifierGroup[]
+  orderItems         OrderItem[]
+
+  @@map("menu_items")
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@index([isPopular])
+  @@index([isAvailable, isPopular])
+}
+
+enum PrinterDestination {
+  KITCHEN
+  BEVERAGE
+  BOTH
+}
+
+model ModifierGroup {
+  id            String     @id @default(uuid()) @db.Uuid
+  menuItemId    String     @map("menu_item_id") @db.Uuid
+  name          String
+  description   String?
+  isRequired    Boolean    @default(false) @map("is_required")
+  minSelections Int        @default(0) @map("min_selections")
+  maxSelections Int?       @map("max_selections") // null for unlimited
+  displayOrder  Int        @default(0) @map("display_order")
+
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  menuItem      MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifiers     Modifier[]
+
+  @@map("modifier_groups")
+  @@index([menuItemId])
+}
+
+model Modifier {
+  id              String    @id @default(uuid()) @db.Uuid
+  modifierGroupId String    @map("modifier_group_id") @db.Uuid
+  name            String
+  priceAdjustment Decimal   @default(0) @map("price_adjustment") @db.Decimal(10, 2)
+  isDefault       Boolean   @default(false) @map("is_default")
+  isAvailable     Boolean   @default(true) @map("is_available")
+  displayOrder    Int       @default(0) @map("display_order")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  modifierGroup      ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderItemModifiers OrderItemModifier[]
+
+  @@map("modifiers")
+  @@index([modifierGroupId])
+}
+
+// ============================================================================
+// ORDER MANAGEMENT
+// ============================================================================
+
+model Order {
+  id                     String        @id @default(uuid()) @db.Uuid
+  orderNumber            Int           @unique @default(autoincrement()) @map("order_number")
+  userId                 String        @map("user_id") @db.Uuid
+  status                 OrderStatus   @default(PENDING)
+  subtotal               Decimal       @db.Decimal(10, 2)
+  taxAmount              Decimal       @map("tax_amount") @db.Decimal(10, 2)
+  totalAmount            Decimal       @map("total_amount") @db.Decimal(10, 2)
+  stripePaymentIntentId  String?       @unique @map("stripe_payment_intent_id")
+  paymentStatus          PaymentStatus @default(PENDING) @map("payment_status")
+  specialInstructions    String?       @map("special_instructions")
+  estimatedReadyTime     DateTime?     @map("estimated_ready_time")
+  actualReadyTime        DateTime?     @map("actual_ready_time")
+
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  user       User        @relation(fields: [userId], references: [id])
+  orderItems OrderItem[]
+  printJobs  PrintJob[]
+
+  @@map("orders")
+  @@index([orderNumber])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model OrderItem {
+  id                  String              @id @default(uuid()) @db.Uuid
+  orderId             String              @map("order_id") @db.Uuid
+  menuItemId          String              @map("menu_item_id") @db.Uuid
+  quantity            Int
+  unitPrice           Decimal             @map("unit_price") @db.Decimal(10, 2)
+  totalPrice          Decimal             @map("total_price") @db.Decimal(10, 2)
+  specialInstructions String?             @map("special_instructions")
+
+  createdAt           DateTime            @default(now()) @map("created_at")
+
+  // Relations
+  order              Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem           MenuItem             @relation(fields: [menuItemId], references: [id])
+  selectedModifiers  OrderItemModifier[]
+
+  @@map("order_items")
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model OrderItemModifier {
+  id              String    @id @default(uuid()) @db.Uuid
+  orderItemId     String    @map("order_item_id") @db.Uuid
+  modifierId      String    @map("modifier_id") @db.Uuid
+  modifierName    String    @map("modifier_name")    // Stored for history
+  priceAdjustment Decimal   @map("price_adjustment") @db.Decimal(10, 2) // Stored for history
+
+  // Relations
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifier  Modifier  @relation(fields: [modifierId], references: [id])
+
+  @@map("order_item_modifiers")
+  @@index([orderItemId])
+  @@index([modifierId])
+}
+
+// ============================================================================
+// PRINTING SYSTEM
+// ============================================================================
+
+model PrintJob {
+  id           String      @id @default(uuid()) @db.Uuid
+  orderId      String      @map("order_id") @db.Uuid
+  printerType  PrinterType @map("printer_type")
+  status       PrintStatus @default(PENDING)
+  attempts     Int         @default(0)
+  lastError    String?     @map("last_error")
+  receiptData  Json?       @map("receipt_data")
+  sentAt       DateTime?   @map("sent_at")
+  printedAt    DateTime?   @map("printed_at")
+
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("print_jobs")
+  @@index([status])
+  @@index([orderId])
+  @@index([status, createdAt])
+}
+
+enum PrinterType {
+  KITCHEN
+  BEVERAGE
+}
+
+enum PrintStatus {
+  PENDING
+  SENT
+  PRINTED
+  FAILED
+}

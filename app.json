@@ -1,0 +1,78 @@
+{
+  "name": "The Commissary Backend",
+  "description": "Mobile ordering backend for The Commissary cafe with Firebase Auth, Stripe payments, and print job queue",
+  "keywords": ["node", "express", "typescript", "cafe", "mobile-ordering", "firebase", "stripe"],
+  "repository": "https://github.com/your-org/cafe-backend",
+  "logo": "",
+  "success_url": "/health",
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production",
+      "required": true
+    },
+    "DATABASE_URL": {
+      "description": "Neon PostgreSQL connection string with pooling",
+      "required": true
+    },
+    "FIREBASE_PROJECT_ID": {
+      "description": "Firebase project ID",
+      "required": true
+    },
+    "FIREBASE_PRIVATE_KEY": {
+      "description": "Firebase service account private key (replace \\n with actual newlines)",
+      "required": true
+    },
+    "FIREBASE_CLIENT_EMAIL": {
+      "description": "Firebase service account email",
+      "required": true
+    },
+    "FIREBASE_STORAGE_BUCKET": {
+      "description": "Firebase Storage bucket name (e.g., your-app.appspot.com)",
+      "required": true
+    },
+    "STRIPE_SECRET_KEY": {
+      "description": "Stripe secret key (sk_live_... for production)",
+      "required": true
+    },
+    "STRIPE_WEBHOOK_SECRET": {
+      "description": "Stripe webhook signing secret (whsec_...)",
+      "required": true
+    },
+    "PRINT_SERVER_API_KEY": {
+      "description": "API key for print server authentication",
+      "generator": "secret",
+      "required": false
+    },
+    "ALLOWED_ORIGINS": {
+      "description": "Comma-separated list of allowed CORS origins",
+      "value": "capacitor://localhost,http://localhost",
+      "required": true
+    },
+    "LOG_LEVEL": {
+      "description": "Logging level (error, warn, info, http, debug)",
+      "value": "info",
+      "required": false
+    },
+    "DEFAULT_TAX_RATE": {
+      "description": "Default sales tax rate (e.g., 0.0635 for 6.35%)",
+      "value": "0.0635",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "addons": [],
+  "scripts": {
+    "postdeploy": "npm run db:migrate:deploy"
+  }
+}
